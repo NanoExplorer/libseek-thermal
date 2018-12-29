@@ -1,6 +1,14 @@
 /*
  *  Seek camera interface
  *  Author: Maarten Vandersteegen
+ * CR TODO:
+ find more bad pixels and add them to the bad px filter
+ probably implement a MAD chop during the flat field stage
+ Figure out dead pixel copy/dontcopy nonsense
+
+Done:
+ normalize the flat frame and divide by it of them instead of subtracting.
+ Keep the dark frame as subtraction.
  */
 
 #include "SeekCam.h"
@@ -24,8 +32,9 @@ SeekCam::SeekCam(int vendor_id, int product_id, uint16_t* buffer, size_t raw_hei
     m_flat_field_calibration_frame(),
     m_additional_ffc(),
     m_dead_pixel_mask()
-{
+    //m_initial_frame() I can't really tell the difference between pics with m_initial_frame correction and without
     /* set ROI to exclude metadata frame regions */
+{
     m_raw_frame = m_raw_frame(roi);
 }
 
@@ -37,7 +46,13 @@ SeekCam::~SeekCam()
 bool SeekCam::open()
 {
     if (m_ffc_filename != std::string()) {
+        cv::Mat tmp;
         m_additional_ffc = cv::imread(m_ffc_filename, -1);
+        cv::Scalar mean;
+        mean = cv::mean(m_additional_ffc);
+        m_additional_ffc.convertTo(tmp,CV_64F);
+        tmp/=mean[0]; //Normalize flat frame to one so that we can divide by it later
+        
 
         if (m_additional_ffc.type() != m_raw_frame.type()) {
             error("Error: '%s' not found or it has the wrong type: %d\n",
@@ -52,6 +67,7 @@ bool SeekCam::open()
                     m_additional_ffc.cols, m_additional_ffc.rows);
             return false;
         }
+        tmp.copyTo(m_additional_ffc);
     }
 
     return open_cam();
@@ -87,7 +103,9 @@ bool SeekCam::grab()
             return true;
 
         } else if (frame_id() == 1) {
+            //std::cout<<"Got ffc"<<std::endl;
             m_raw_frame.copyTo(m_flat_field_calibration_frame);
+            //cv::imwrite("lastdark_raw.png", m_raw_frame);
         }
     }
 
@@ -97,12 +115,19 @@ bool SeekCam::grab()
 void SeekCam::retrieve(cv::Mat& dst)
 {
     /* apply flat field calibration */
+    //cv::Mat raw_corr, ffc_corr;
+    //cv::divide(m_raw_frame, m_initial_frame,raw_corr,1,m_raw_frame.type());
+    //cv::divide(m_flat_field_calibration_frame,m_initial_frame,ffc_corr,1,m_flat_field_calibration_frame.type());
+    //experimenting with the initial_frame. None seemed to work very well. additional_ffc works better
     m_raw_frame += m_offset - m_flat_field_calibration_frame;
+    //cv::divide(m_raw_frame,m_initial_frame,m_raw_frame,1,m_raw_frame.type());
+
     /* filter out dead pixels */
     apply_dead_pixel_filter(m_raw_frame, dst);
-    /* apply additional flat field calibration for degradient */
+    //m_raw_frame.copyTo(dst);
+    /* apply additional flat field calibration and do it right this time! */
     if (!m_additional_ffc.empty())
-        dst += m_offset - m_additional_ffc;
+        cv::divide(dst,m_additional_ffc,dst,1,dst.type());
 }
 
 bool SeekCam::read(cv::Mat& dst)
@@ -168,6 +193,15 @@ bool SeekCam::open_cam()
             error("Error: expected first frame to have id 4\n");
             return false;
         }
+        //cv::Mat tmp;
+        //m_raw_frame.convertTo(tmp,CV_64F);
+        //tmp*=-0.2; This was dark magic. I just fit a linear slope between the 
+        //tmp+=17000; initial frame and a flat pic. Results were not the best.
+        //cv::Scalar mean;
+        //mean = cv::mean(tmp);
+        //tmp/=mean[0];
+        //tmp.copyTo(m_initial_frame);
+
 
         create_dead_pixel_list(m_raw_frame, m_dead_pixel_mask, m_dead_pixel_list);
 
@@ -216,6 +250,9 @@ void SeekCam::print_usb_data(std::vector<uint8_t>& data)
 void SeekCam::create_dead_pixel_list(cv::Mat frame, cv::Mat& dead_pixel_mask,
                                             std::vector<cv::Point>& dead_pixel_list)
 {
+    //cv::Mat outframe;
+    //frame.convertTo(outframe, CV_16UC1);
+    //cv::imwrite("debug.png", outframe);
     int x, y;
     bool has_unlisted_pixels;
     double max_value;
@@ -235,8 +272,10 @@ void SeekCam::create_dead_pixel_list(cv::Mat frame, cv::Mat& dead_pixel_mask,
     hist.at<float>(0, 0) = 0;       /* suppres 0th bin since its usual the highest,
                                     but we don't want this one */
     cv::minMaxLoc(hist, nullptr, nullptr, nullptr, &hist_max_value);
+    
     const double threshold = hist_max_value.y - (max_value - hist_max_value.y);
-
+    //std::cout << hist_max_value.y<<" "<<max_value<<" "<<threshold<<std::endl;
+    //std::cout << hist.at<float>(0,6146)<<std::endl;
     /* calculate the dead pixels mask */
     cv::threshold(tmp, tmp, threshold, 255, cv::THRESH_BINARY);
     tmp.convertTo(dead_pixel_mask, CV_8UC1);
@@ -266,7 +305,11 @@ void SeekCam::create_dead_pixel_list(cv::Mat frame, cv::Mat& dead_pixel_mask,
         }
     } while (has_unlisted_pixels);
 }
-
+void SeekCam::add_dead_pixel(std::vector<cv::Point> new_dead_pixels)
+{
+    m_dead_pixel_list.insert(m_dead_pixel_list.end(),new_dead_pixels.begin(),new_dead_pixels.end());
+    
+}
 void SeekCam::apply_dead_pixel_filter(cv::Mat& src, cv::Mat& dst)
 {
     size_t i;

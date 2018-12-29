@@ -54,6 +54,8 @@ public:
      */
     bool read(cv::Mat& dst);
 
+    void add_dead_pixel(std::vector<cv::Point> new_dead_pixels);
+
     /*
      *  Get the frame counter value
      */
@@ -85,6 +87,7 @@ protected:
     uint16_t* m_raw_data;
     size_t m_raw_data_size;
     cv::Mat m_raw_frame;
+    //cv::Mat m_initial_frame;
     cv::Mat m_flat_field_calibration_frame;
     cv::Mat m_additional_ffc;
     cv::Mat m_dead_pixel_mask;
