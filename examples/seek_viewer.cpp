@@ -50,6 +50,9 @@ void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int r
     cv::meanStdDev(inframe,imMean,imStd);
     frame_g16=cv::Mat::zeros(cols,rows,CV_16UC1);
 
+    double raw_maxvalue;
+    cv::minMaxIdx(inframe,0,&raw_maxvalue);
+    std::cout << raw_maxvalue << std::endl;
 
     min=imMean[0]-2*imStd[0];
     max=imMean[0]+4*imStd[0];
@@ -111,6 +114,7 @@ int main(int argc, char** argv)
     args::ValueFlag<std::string> _camtype(parser, "camtype", "Seek Thermal Camera Model - seek or seekpro", {'t', "camtype"});
     args::ValueFlag<int> _scalemin(parser, "scalemin", "Minimum value of color scale", {'m', "scalemin"});
     args::ValueFlag<int> _scalemax(parser, "scalemax", "Maximum value of color scale", {'M', "scalemax"});
+    args::Flag _doLogScale(parser, "logscale", "Whether to use a log scale", {'l',"logscale"});
     // Parse arguments
     try
     {
@@ -164,6 +168,10 @@ int main(int argc, char** argv)
 
     if (_scalemax)
         staticMax = args::get(_scalemax);
+    bool logScale=false;
+    if (_doLogScale)
+        logScale = args::get(_doLogScale);
+
 
     // Register signals
     signal(SIGINT, handle_sig);
@@ -221,8 +229,13 @@ int main(int argc, char** argv)
         }
 
         // Retrieve frame from seek and process
-        process_frame(seekframe, outframe, scale, colormap, rotate,last,staticMin,staticMax);
 
+        if(logScale){ 
+            seekframe.convertTo(seekframe,CV_64F);
+            cv::log(seekframe,seekframe);
+        }
+        process_frame(seekframe, outframe, scale, colormap, rotate,last,staticMin,staticMax);
+        //std::cout << outframe.type() <<std::endl;
         if (output == "window") {
             imshow("SeekThermal", outframe);
             char c = waitKey(10);
@@ -231,11 +244,17 @@ int main(int argc, char** argv)
             }
         } else {
             writer << outframe;
+            imshow("SeekThermal", outframe);
+            char c = waitKey(10);
+            if (c == 's') {
+                waitKey(0);
+            }
         }
     }
     //cv::Mat outfile;
     //outframe.convertTo(outfile, CV_16UC3);
     cv::imwrite("lastimg_raw.png", seekframe);
+    std::cout<< outframe.depth()<<outframe.channels();
     std::cout << "Break signal detected, exiting" << std::endl;
     return 0;
 }
