@@ -18,6 +18,7 @@
 #include <linux/fb.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <wiringPi.h>
 
 using namespace cv;
 using namespace LibSeek;
@@ -53,7 +54,7 @@ void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int r
     Mat frame_g8, frame_g16,temp,tempmask; // Transient Mat containers for processing
     int cols=inframe.cols,rows=inframe.rows;
 
-    ushort min,max;
+    ushort min,max,low,high;
     cv::Scalar imMean,imStd;
     cv::meanStdDev(inframe,imMean,imStd);
     frame_g16=cv::Mat::zeros(cols,rows,CV_16UC1);
@@ -62,23 +63,27 @@ void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int r
     cv::minMaxIdx(inframe,0,&raw_maxvalue);
     //std::cout << raw_maxvalue << std::endl;
 
-    min=imMean[0]-2*imStd[0];
-    max=imMean[0]+4*imStd[0];
+    low=imMean[0]-2*imStd[0];
+    high=imMean[0]+4*imStd[0];
 
     //slower min/max handling. In the old code, bad pixels would cause the colorbar scale
     //to jump all over the place. The averaging I do here slows that down so that colorbar scale varys slower.
     //Still this is not the best solution because a big thing of constant temperature looks hotter near edges of screen.
-    last[0]=(2*last[0]+min)/3;
-    last[1]=(2*last[1]+max)/3;
+    last[0]=(2*last[0]+low)/3;
+    last[1]=(2*last[1]+high)/3;
 
     if (staticMin > -1)
-        last[0]=staticMin;
+        min=staticMin;
+    else
+        min=last[0];
     
     if (staticMax > -1)
-        last[1]=staticMax;
+        max=staticMax;
+    else
+        max=last[1];
     
     //std::cout<<min<<" "<<max<<std::endl;
-    frame_g16=(inframe-last[0])*(65535.0/(last[1]-last[0]));
+    frame_g16=(inframe-min)*(65535.0/(max-min));
     //normalize(inframe, frame_g16, 0, 65535, NORM_MINMAX,-1,mask);
     // Convert seek CV_16UC1 to CV_8UC1
     frame_g16.convertTo(frame_g8, CV_8UC1, 1.0/256.0 );
@@ -225,7 +230,19 @@ int main(int argc, char** argv)
     printf("The framebuffer device was mapped to memory successfully.\n");
 
 
-
+    //setup gpio buttons
+    wiringPiSetup();
+    //4 buttons on screen
+    pinMode(0,INPUT);
+    pullUpDnControl(0,PUD_UP);
+    pinMode(3,INPUT);
+    pullUpDnControl(3,PUD_UP);
+    pinMode(4,INPUT);
+    pullUpDnControl(4,PUD_UP);
+    pinMode(2,INPUT);
+    pullUpDnControl(2,PUD_UP);
+    //battery low
+    pinMode(7,INPUT);
 
     // Setup seek camera
     LibSeek::SeekCam* seek;
@@ -277,7 +294,8 @@ int main(int argc, char** argv)
 
         std::cout << "Video stream created, dimension: " << outframe.cols << "x" << outframe.rows << ", fps:" << fps << std::endl;
     }
-    int row, col, location;
+    int row, col, location, shutdowncounter;
+    shutdowncounter=0;
     // Main loop to retrieve frames from camera and output
     while (!sigflag) {
         // If signal for interrupt/termination was received, break out of main loop and exit
@@ -338,7 +356,67 @@ int main(int argc, char** argv)
                 }
             }
         }
-        
+        bool pin17=!digitalRead(0);
+        bool pin22=!digitalRead(3);
+        bool pin23=!digitalRead(4);
+        bool pin27=!digitalRead(2);
+        bool pin4=digitalRead(7);
+        if (!pin4){
+            printf("pin 4 hi\n");
+        }
+        if (pin17){
+            //do flat field
+            bool new_flat = true;
+            cv::Mat frame, avg_frame,frame_u16;
+            int smoothing=100;
+            printf("Flat field started\n");
+            for (int i=0; i<smoothing; i++) {
+
+                if (!seek->grab()) {
+                    std::cout << "no more LWIR img" << std::endl;
+                    return -1;
+                }
+
+                seek->rawRetrieve(frame_u16);
+                frame_u16.convertTo(frame, CV_64FC1);
+
+                if (new_flat) {
+                    new_flat=false;
+                    frame.copyTo(avg_frame);
+                } else {
+                    avg_frame += frame;
+                }
+
+                cv::waitKey(10);
+            }
+            avg_frame/=smoothing;
+            cv::Scalar mean = cv::mean(avg_frame);
+            avg_frame/=mean[0];
+            seek->set_additional_ffc(avg_frame);
+            printf("Flat field finished\n");
+        }
+        if (pin22){
+            //change colorbar mode to variable
+            staticMin = -1;
+            staticMax = -1;
+            printf("set cbar to variable\n");
+        }
+        if (pin23){
+            staticMin = last[0];
+            staticMax = last[1];
+            printf("reset colorbar\n");
+        }
+        if (pin27){
+            printf("Hold to shutdown\n");
+            shutdowncounter++;
+            if (shutdowncounter>20) {
+                system("sudo shutdown now");
+            } 
+        } else {
+            shutdowncounter=0;
+        }
+
+
     }
     munmap(fbp,screensize);
     close(fbfd);
