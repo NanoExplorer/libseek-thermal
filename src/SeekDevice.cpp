@@ -122,6 +122,12 @@ bool SeekDevice::fetch_frame(uint16_t* buffer, std::size_t size)
             error("Error: bulk transfer failed: %s\n", libusb_error_name(res));
             return false;
         }
+        // Sometimes we have less data transferred than expected - so just return this "broken" frame and keep going
+        if (res == LIBUSB_ERROR_TIMEOUT){
+            error("We have libusb timeout here: %s\n", libusb_error_name(res));
+            return true;
+        }
+        
         debug("Actual length %d\n", actual_length);
         todo -= actual_length;
         done += actual_length;
