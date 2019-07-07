@@ -18,13 +18,16 @@
 #include <linux/fb.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <wiringPi.h>
+#include <fstream>
 
 using namespace cv;
 using namespace LibSeek;
 
 // Setup sig handling
 static volatile sig_atomic_t sigflag = 0;
-void handle_sig(int sig) {
+void handle_sig(int sig)
+{
     (void)sig;
     sigflag = 1;
 }
@@ -48,12 +51,13 @@ void handle_sig(int sig) {
 //     return m_additional_ffc;
 // }
 // Function to process a raw (corrected) seek frame
-void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int rotate, int last[], int staticMin, int staticMax) {
+void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int rotate, int last[], int staticMin, int staticMax)
+{
     
     Mat frame_g8, frame_g16,temp,tempmask; // Transient Mat containers for processing
     int cols=inframe.cols,rows=inframe.rows;
 
-    ushort min,max;
+    ushort min,max,low,high;
     cv::Scalar imMean,imStd;
     cv::meanStdDev(inframe,imMean,imStd);
     frame_g16=cv::Mat::zeros(cols,rows,CV_16UC1);
@@ -62,23 +66,27 @@ void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int r
     cv::minMaxIdx(inframe,0,&raw_maxvalue);
     //std::cout << raw_maxvalue << std::endl;
 
-    min=imMean[0]-2*imStd[0];
-    max=imMean[0]+4*imStd[0];
+    low=imMean[0]-2*imStd[0];
+    high=imMean[0]+4*imStd[0];
 
     //slower min/max handling. In the old code, bad pixels would cause the colorbar scale
     //to jump all over the place. The averaging I do here slows that down so that colorbar scale varys slower.
     //Still this is not the best solution because a big thing of constant temperature looks hotter near edges of screen.
-    last[0]=(2*last[0]+min)/3;
-    last[1]=(2*last[1]+max)/3;
+    last[0]=(2*last[0]+low)/3;
+    last[1]=(2*last[1]+high)/3;
 
     if (staticMin > -1)
-        last[0]=staticMin;
+        min=staticMin;
+    else
+        min=last[0];
     
     if (staticMax > -1)
-        last[1]=staticMax;
+        max=staticMax;
+    else
+        max=last[1];
     
     //std::cout<<min<<" "<<max<<std::endl;
-    frame_g16=(inframe-last[0])*(65535.0/(last[1]-last[0]));
+    frame_g16=(inframe-min)*(65535.0/(max-min));
     //normalize(inframe, frame_g16, 0, 65535, NORM_MINMAX,-1,mask);
     // Convert seek CV_16UC1 to CV_8UC1
     frame_g16.convertTo(frame_g8, CV_8UC1, 1.0/256.0 );
@@ -105,6 +113,61 @@ void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int r
     } else {
         cv::cvtColor(frame_g8, outframe, cv::COLOR_GRAY2BGR);
     }
+}
+
+void new_flat(LibSeek::SeekCam* seek) 
+{
+    bool new_flat = true;
+    cv::Mat frame, avg_frame,frame_u16;
+    int smoothing=100;
+    std::cout<<"Flat field started"<<std::flush;
+    for (int i=0; i<smoothing; i++) {
+
+        if (!seek->grab()) {
+            std::cout << "no more LWIR img" << std::endl;
+            return;
+        }
+
+        seek->rawRetrieve(frame_u16);
+        frame_u16.convertTo(frame, CV_64FC1);
+
+        if (new_flat) {
+            new_flat=false;
+            frame.copyTo(avg_frame);
+        } else {
+            avg_frame += frame;
+        }
+
+        cv::waitKey(10);
+    }
+    avg_frame/=smoothing;
+    cv::Scalar mean = cv::mean(avg_frame);
+    avg_frame/=mean[0];
+    seek->set_additional_ffc(avg_frame);
+    std::cout<<"Flat field finished"<<std::flush;
+}
+
+void save_image(cv::Mat &seekframe, cv::Mat &outframe)
+{
+    std::ifstream currentnumfile;
+    std::ofstream nextnumfile;
+    currentnumfile.open("./imgs/.nextnum");
+    int currentnum;
+    currentnumfile >> currentnum;
+    currentnumfile.close();
+    std::string outnum = std::to_string(currentnum);
+
+    while (outnum.size()<4){
+        outnum="0"+outnum;
+    }
+
+    imwrite("./imgs/img_"+outnum+"_raw.png",seekframe);
+    imwrite("./imgs/img_"+outnum+".png",outframe);
+
+    nextnumfile.open("./imgs/.nextnum");
+    nextnumfile << currentnum+1;
+    nextnumfile.close();
+    std::cout <<std::endl<< "saved image ./imgs/img_"+outnum+".png"<<std::flush;
 }
 
 int main(int argc, char** argv)
@@ -225,7 +288,19 @@ int main(int argc, char** argv)
     printf("The framebuffer device was mapped to memory successfully.\n");
 
 
-
+    //setup gpio buttons
+    wiringPiSetup();
+    //4 buttons on screen
+    pinMode(0,INPUT);
+    pullUpDnControl(0,PUD_UP);
+    pinMode(3,INPUT);
+    pullUpDnControl(3,PUD_UP);
+    pinMode(4,INPUT);
+    pullUpDnControl(4,PUD_UP);
+    pinMode(2,INPUT);
+    pullUpDnControl(2,PUD_UP);
+    //battery low
+    pinMode(7,INPUT);
 
     // Setup seek camera
     LibSeek::SeekCam* seek;
@@ -254,8 +329,8 @@ int main(int argc, char** argv)
     last[0]=0;
     last[1]=65535;
     float xscale,yscale;
-    xscale = (float)vinfo.xres/seekframe.cols;
-    yscale = (float)vinfo.yres/seekframe.rows;
+    xscale = static_cast<float>(vinfo.xres)/seekframe.cols;
+    yscale = static_cast<float>(vinfo.yres)/seekframe.rows;
     if (xscale < yscale){
         scale = xscale;
     }else{
@@ -277,7 +352,9 @@ int main(int argc, char** argv)
 
         std::cout << "Video stream created, dimension: " << outframe.cols << "x" << outframe.rows << ", fps:" << fps << std::endl;
     }
-    int row, col, location;
+    int row, col, location, shutdowncounter, textcounter,rowsToCopy;
+    shutdowncounter=0;
+    textcounter=0;
     // Main loop to retrieve frames from camera and output
     while (!sigflag) {
         // If signal for interrupt/termination was received, break out of main loop and exit
@@ -298,7 +375,12 @@ int main(int argc, char** argv)
         }
         //write image to framebuffer
         //bool flag = true;
-        for (row = 0; row < outframe.rows; row++) {
+        if (textcounter>0){
+            rowsToCopy = outframe.rows-12;
+            textcounter --;
+        } else
+            rowsToCopy = outframe.rows;
+        for (row = 0; row < rowsToCopy; row++) {
             uint8_t* rowptr = outframe.ptr(row);
             //flag = true;
             for (col=0; col<outframe.cols; col++) {
@@ -338,7 +420,49 @@ int main(int argc, char** argv)
                 }
             }
         }
-        
+        bool pin17=!digitalRead(0);
+        bool pin22=!digitalRead(3);
+        bool pin23=!digitalRead(4);
+        bool pin27=!digitalRead(2);
+        bool pin4=digitalRead(7);
+        if (!pin4){
+            std::cout<<std::endl<<"pin 4 hi"<<std::flush;
+            textcounter=20;
+        }
+        if (pin17){
+            //do flat field
+            new_flat(seek);
+        }
+        if (pin22){
+            //change colorbar mode to variable
+            staticMin = -1;
+            staticMax = -1;
+            std::cout<<std::endl<<"set cbar to variable"<<std::flush;
+            textcounter=8;
+        }
+        if (pin23){
+            staticMin = last[0];
+            staticMax = last[1];
+            std::cout<<std::endl<<"reset colorbar"<<std::flush;
+            textcounter=8;
+        }
+        if (pin27){
+
+            if (shutdowncounter>20) {
+                system("sudo shutdown now");
+            } 
+            else if (shutdowncounter == 0){
+                save_image(seekframe,outframe);
+            } else if (shutdowncounter == 5){
+                std::cout<<std::endl<<"Hold to shutdown"<<std::flush;
+            }
+            textcounter=10;
+            shutdowncounter++;
+        } else {
+            shutdowncounter=0;
+        }
+
+
     }
     munmap(fbp,screensize);
     close(fbfd);

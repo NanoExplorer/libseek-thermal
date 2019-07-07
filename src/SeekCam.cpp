@@ -72,7 +72,21 @@ bool SeekCam::open()
 
     return open_cam();
 }
-
+bool SeekCam::set_additional_ffc(cv::Mat& newframe){
+        if (newframe.type() != CV_64F && newframe.type() != CV_32F) {
+            error("Error: new ffc has the wrong type: %d\n",
+                    m_additional_ffc.type());
+            return false;
+        }
+        if (newframe.size() != m_raw_frame.size()) {
+            error("Error: expected new ffc to have size [%d,%d], got [%d,%d]\n",
+                    m_raw_frame.cols, m_raw_frame.rows,
+                    newframe.cols, newframe.rows);
+            return false;
+        }
+        newframe.copyTo(m_additional_ffc);
+        return true;
+}
 void SeekCam::close()
 {
     if (m_dev.isOpened()) {
@@ -131,7 +145,11 @@ void SeekCam::retrieve(cv::Mat& dst)
         //std::cout << cv::mean(m_additional_ffc) << std::endl;
     }
 }
-
+void SeekCam::rawRetrieve(cv::Mat& dst)
+{   
+    m_raw_frame += m_offset - m_flat_field_calibration_frame;
+    apply_dead_pixel_filter(m_raw_frame, dst);
+}
 bool SeekCam::read(cv::Mat& dst)
 {
     if (!grab())
