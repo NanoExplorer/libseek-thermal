@@ -250,10 +250,11 @@ int main(int argc, char** argv)
     signal(SIGTERM, handle_sig);
 
     //setup framebuffer
+    Framebuffer fbwriter;
     if (_fbpath)
-        Framebuffer fbwriter(args::get(_fbpath).c_str());
+        fbwriter = Framebuffer(args::get(_fbpath).c_str());
     else
-        Framebuffer fbwriter("/dev/fb0");
+        fbwriter = Framebuffer("/dev/fb0");
 
     setupButtons();
     ButtonState bs;
