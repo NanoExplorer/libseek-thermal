@@ -198,6 +198,7 @@ int main(int argc, char** argv)
     args::ValueFlag<int> _colormap(parser, "colormap", "Color Map - number between 0 and 12", {'c', "colormap"});
     args::ValueFlag<int> _rotate(parser, "rotate", "Rotation - 0, 90, 180 or 270 (default) degrees", {'r', "rotate"});
     args::ValueFlag<std::string> _camtype(parser, "camtype", "Seek Thermal Camera Model - seek or seekpro", {'t', "camtype"});
+    args::ValueFlag<std::string> _fbpath(parser, "fbdevice", "Framebuffer Device", {'d',"dev"});
     // Parse arguments
     try
     {
@@ -249,7 +250,10 @@ int main(int argc, char** argv)
     signal(SIGTERM, handle_sig);
 
     //setup framebuffer
-    Framebuffer fbwriter("/dev/fb0");
+    if (_fbpath)
+        Framebuffer fbwriter(args::get(_fbpath));
+    else
+        Framebuffer fbwriter("/dev/fb0");
 
     setupButtons();
     ButtonState bs;
