@@ -251,7 +251,7 @@ int main(int argc, char** argv)
 
     //setup framebuffer
     if (_fbpath)
-        Framebuffer fbwriter(args::get(_fbpath));
+        Framebuffer fbwriter(args::get(_fbpath).c_str());
     else
         Framebuffer fbwriter("/dev/fb0");
 
