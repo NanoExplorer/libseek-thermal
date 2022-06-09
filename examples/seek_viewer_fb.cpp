@@ -250,7 +250,7 @@ int main(int argc, char** argv)
     signal(SIGTERM, handle_sig);
 
     //setup framebuffer
-    std:string fbpath = "/dev/fb0";
+    std::string fbpath = "/dev/fb0";
     if (_fbpath)
         fbpath = args::get(_fbpath);
     Framebuffer fbwriter(fbpath.c_str());
