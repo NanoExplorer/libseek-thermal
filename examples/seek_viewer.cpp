@@ -45,7 +45,7 @@ void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int r
     Mat frame_g8, frame_g16,temp,tempmask; // Transient Mat containers for processing
     int cols=inframe.cols,rows=inframe.rows;
 
-    ushort min,max;
+    ushort min,max,low,high;
     cv::Scalar imMean,imStd;
     cv::meanStdDev(inframe,imMean,imStd);
     frame_g16=cv::Mat::zeros(cols,rows,CV_16UC1);
@@ -54,23 +54,25 @@ void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int r
     cv::minMaxIdx(inframe,0,&raw_maxvalue);
     std::cout << raw_maxvalue << std::endl;
 
-    min=imMean[0]-2*imStd[0];
-    max=imMean[0]+4*imStd[0];
+    low=imMean[0]-2*imStd[0];
+    high=imMean[0]+4*imStd[0];
 
     //slower min/max handling. In the old code, bad pixels would cause the colorbar scale
     //to jump all over the place. The averaging I do here slows that down so that colorbar scale varys slower.
-    //Still this is not the best solution because a big thing of constant temperature looks hotter near edges of screen.
-    last[0]=(2*last[0]+min)/3;
-    last[1]=(2*last[1]+max)/3;
+    last[0]=(2*last[0]+low)/3;
+    last[1]=(2*last[1]+high)/3;
 
     if (staticMin > -1)
-        last[0]=staticMin;
+        min=staticMin;
+    else
+        min=last[0];
     
     if (staticMax > -1)
-        last[1]=staticMax;
+        max=staticMax;
+    else
+        max=last[1];
     
-    //std::cout<<min<<" "<<max<<std::endl;
-    frame_g16=(inframe-last[0])*(65535.0/(last[1]-last[0]));
+    frame_g16=(inframe-min)*(65535.0/(max-min));
     //normalize(inframe, frame_g16, 0, 65535, NORM_MINMAX,-1,mask);
     // Convert seek CV_16UC1 to CV_8UC1
     frame_g16.convertTo(frame_g8, CV_8UC1, 1.0/256.0 );
