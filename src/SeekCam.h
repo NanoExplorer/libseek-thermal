@@ -42,6 +42,7 @@ public:
      */
     void retrieve(cv::Mat& dst);
 
+    void rawRetrieve(cv::Mat& dst);
     /*
      *  Convert a 14-bit thermal measurement to an
      *  enhanced 8-bit greyscale image for visual inspection
@@ -55,7 +56,7 @@ public:
     bool read(cv::Mat& dst);
 
     void add_dead_pixel(std::vector<cv::Point> new_dead_pixels);
-
+    bool set_additional_ffc(cv::Mat& newframe);
     /*
      *  Get the frame counter value
      */

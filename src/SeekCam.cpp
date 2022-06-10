@@ -52,7 +52,7 @@ bool SeekCam::open()
         mean = cv::mean(m_additional_ffc);
         m_additional_ffc.convertTo(tmp,CV_64F);
         tmp/=mean[0]; //Normalize flat frame to one so that we can divide by it later
-        
+        //std::cout<<mean[0]<<std::endl;
 
         if (m_additional_ffc.type() != m_raw_frame.type()) {
             error("Error: '%s' not found or it has the wrong type: %d\n",
@@ -72,7 +72,21 @@ bool SeekCam::open()
 
     return open_cam();
 }
-
+bool SeekCam::set_additional_ffc(cv::Mat& newframe){
+        if (newframe.type() != CV_64F && newframe.type() != CV_32F) {
+            error("Error: new ffc has the wrong type: %d\n",
+                    m_additional_ffc.type());
+            return false;
+        }
+        if (newframe.size() != m_raw_frame.size()) {
+            error("Error: expected new ffc to have size [%d,%d], got [%d,%d]\n",
+                    m_raw_frame.cols, m_raw_frame.rows,
+                    newframe.cols, newframe.rows);
+            return false;
+        }
+        newframe.copyTo(m_additional_ffc);
+        return true;
+}
 void SeekCam::close()
 {
     if (m_dev.isOpened()) {
@@ -126,10 +140,16 @@ void SeekCam::retrieve(cv::Mat& dst)
     apply_dead_pixel_filter(m_raw_frame, dst);
     //m_raw_frame.copyTo(dst);
     /* apply additional flat field calibration and do it right this time! */
-    if (!m_additional_ffc.empty())
+    if (!m_additional_ffc.empty()) {
         cv::divide(dst,m_additional_ffc,dst,1,dst.type());
+        //std::cout << cv::mean(m_additional_ffc) << std::endl;
+    }
 }
-
+void SeekCam::rawRetrieve(cv::Mat& dst)
+{   
+    m_raw_frame += m_offset - m_flat_field_calibration_frame;
+    apply_dead_pixel_filter(m_raw_frame, dst);
+}
 bool SeekCam::read(cv::Mat& dst)
 {
     if (!grab())

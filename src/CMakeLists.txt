@@ -5,6 +5,7 @@ set (HEADERS
     SeekLogging.h
     SeekThermal.h
     SeekThermalPro.h
+    framebuffer.h
 )
 
 set (SOURCES
@@ -12,6 +13,7 @@ set (SOURCES
     SeekDevice.cpp
     SeekThermal.cpp
     SeekThermalPro.cpp
+    framebuffer.cpp
 )
 
 set (SRC ${SOURCES} ${HEADERS})
