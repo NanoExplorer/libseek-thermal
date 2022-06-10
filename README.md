@@ -149,3 +149,13 @@ seek_viewer -t seek -F seek_ffc.png
 seek_test_pro seekpro_ffc.png
 seek_viewer -t seekpro -F seekpro_ffc.png
 ```
+## Framebuffer Implementation
+In order to run this program from a raspberry pi zero connected to a small 2.2" 320x240 screen, I have implemented a framebuffer
+output for the program. Instead of OpenCV opening a window under X, the image will be sent to the /dev/fb0 device, which draws
+on the screen directly. This will not work if you're running X. I have also implemented functions for the buttons on gpio pins
+17, 22, 23, and 27 - 17 starts a flat field, 22 switches to a variable colorbar scale, 23 sets a fixed colorbar scale based on
+whatever you're currently looking at, and 27 takes a still image (if you hold down 27 it shuts down the system).
+
+This implementation is based around the Adafruit 2.2" TFT display (https://www.adafruit.com/product/2315) set in raw text-only 
+mode based on their setup script. I have used a raspberry pi zero so that you can directly plug the SEEK thermal camera into the
+pi without adapters. Because of this, I had to solder the screen to the back of the pi instead of the front, which made for much more complicated wiring. 
