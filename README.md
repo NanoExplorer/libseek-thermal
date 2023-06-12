@@ -58,27 +58,23 @@ For more build options (debug/release, install prefix, opencv install dir, addre
 cmake-gui ../
 ```
 
-## Getting USB access
+## Configuring USB access
 
-You need to add a udev rule to be able to run the program as non root user:
+You need to add a udev rule to be able to run the program as non root user, and another rule to prevent the kernel from putting the device to sleep. (If the camera is put to sleep, running any utility will fail with `Error: control transfer failed: LIBUSB_ERROR_PIPE` and you will be forced to unplug the camera and plug it back in again.)
 
-Udev rule:
-
-```
-SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="XXXX", MODE="0666", GROUP="users"
-```
-
-Replace 'XXXX' with:
-* 0010: Seek Thermal Compact/CompactXR
-* 0011: Seek Thermal CompactPRO
-
-or manually chmod the device file after plugging the usb cable:
+Udev rules:
 
 ```
-sudo chmod 666 /dev/bus/usb/00x/00x
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0010", MODE="0666", GROUP="users"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0010", TEST=="power/control", ATTR{power/control}:="on"
+
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0011", MODE="0666", GROUP="users"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0011", TEST=="power/control", ATTR{power/control}:="on"
 ```
 
-with '00x' the usb bus found with the lsusb command
+Put the above in `/etc/udev/rules.d/90-seekcam.rules`.
+
+The lines with `MODE=` set the device to be readable and writable by everyone, and the lines with `power/control` prevent sleep. `idProduct==0011` corresponds to the Seek Pro and `idProduct==0010` applies to the Seek Compact and Seek Compact XR.
 
 ## Running example binaries
 
