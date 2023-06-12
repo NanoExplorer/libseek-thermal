@@ -7,7 +7,6 @@
 #include "SeekLogging.h"
 #include <libusb.h>
 #include <endian.h>
-#include <stdio.h>
 
 using namespace LibSeek;
 
@@ -78,6 +77,7 @@ bool SeekDevice::open()
 
 void SeekDevice::close()
 {
+
     if (m_handle != NULL) {
         libusb_release_interface(m_handle, 0);  /* release claim */
         libusb_close(m_handle);                 /* revert open */
@@ -86,7 +86,7 @@ void SeekDevice::close()
 
     if (m_ctx != NULL) {
         libusb_exit(m_ctx);                     /* revert exit */
-        m_ctx = NULL;
+                m_ctx = NULL;
     }
 
     m_is_opened = false;

@@ -183,6 +183,7 @@ int main(int argc, char** argv)
     LibSeek::SeekCam* seek;
     LibSeek::SeekThermalPro seekpro(args::get(_ffc));
     LibSeek::SeekThermal seekclassic(args::get(_ffc));
+
     if (camtype == "seekpro")
         seek = &seekpro;
     else
