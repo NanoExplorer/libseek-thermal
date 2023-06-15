@@ -4,6 +4,8 @@
  *
  */
 
+#ifndef __APPLE__
+
 #ifndef FRAMEBUFFER_H
 #define FRAMEBUFFER_H
 
@@ -42,3 +44,4 @@ protected:
 
 
 #endif //FRAMEBUFFER_H
+#endif //APPLE

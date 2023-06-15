@@ -5,7 +5,12 @@
 
 #include "SeekThermalPro.h"
 #include "SeekLogging.h"
-#include <endian.h>
+#ifdef __APPLE__
+  #include "macendian.h"
+#else
+  #include <endian.h>
+#endif
+
 
 using namespace LibSeek;
 

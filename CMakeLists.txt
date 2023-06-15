@@ -21,6 +21,12 @@ endif ()
 message (STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 find_package (OpenCV REQUIRED)
+find_path(LIBUSB_INCLUDE_DIR
+  NAMES libusb.h
+  PATH_SUFFIXES "include" "libusb" "libusb-1.0")
+find_library(LIBUSB_LIBRARY
+  NAMES usb-1.0
+  PATH_SUFFIXES "lib" "lib32" "lib64" REQUIRED)
 
 add_subdirectory (src)
 add_subdirectory (examples)

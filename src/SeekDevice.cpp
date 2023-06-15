@@ -6,7 +6,11 @@
 #include "SeekDevice.h"
 #include "SeekLogging.h"
 #include <libusb.h>
-#include <endian.h>
+#ifdef __APPLE__
+  #include "macendian.h"
+#else
+  #include <endian.h>
+#endif
 
 using namespace LibSeek;
 

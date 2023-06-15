@@ -4,6 +4,7 @@
  * Heavily copied from someone's framebuffer test code. Maybe QT? I don't remember. 
  */
 
+#ifndef __APPLE__
 #include "framebuffer.h"
 
 using namespace LibSeek;
@@ -118,3 +119,4 @@ void Framebuffer::writeFrame(cv::Mat& frame){
         }
     }
 }
+#endif //APPLE
