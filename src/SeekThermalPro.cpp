@@ -5,7 +5,12 @@
 
 #include "SeekThermalPro.h"
 #include "SeekLogging.h"
-#include <endian.h>
+#ifdef __APPLE__
+  #include "macendian.h"
+#else
+  #include <endian.h>
+#endif
+
 
 using namespace LibSeek;
 
@@ -21,37 +26,49 @@ SeekThermalPro::SeekThermalPro(std::string ffc_filename) :
 
 bool SeekThermalPro::init_cam()
 {
+    debug("init_cam");
     {
         std::vector<uint8_t> data = { 0x01 };
         if (!m_dev.request_set(DeviceCommand::TARGET_PLATFORM, data)) {
             /* deinit and retry if cam was not properly closed */
+            debug("closing");
             close();
+            debug("closing dev");
+            m_dev.close();
+            debug("opening dev");
+            m_dev.open();
+            debug("retrying");
             if (!m_dev.request_set(DeviceCommand::TARGET_PLATFORM, data))
                 return false;
         }
     }
+    debug("set op mode");
     {
         std::vector<uint8_t> data = { 0x00, 0x00 };
         if (!m_dev.request_set(DeviceCommand::SET_OPERATION_MODE, data))
             return false;
     }
+    debug("get fw info");
     {
         std::vector<uint8_t> data(4);
         if (!m_dev.request_get(DeviceCommand::GET_FIRMWARE_INFO, data))
             return false;
         print_usb_data(data);
     }
+    debug("read chip id");
     {
         std::vector<uint8_t> data(12);
         if (!m_dev.request_get(DeviceCommand::READ_CHIP_ID, data))
             return false;
         print_usb_data(data);
     }
+    debug("set factsory settings features");
     {
         std::vector<uint8_t> data = { 0x06, 0x00, 0x08, 0x00, 0x00, 0x00 };
         if (!m_dev.request_set(DeviceCommand::SET_FACTORY_SETTINGS_FEATURES, data))
             return false;
     }
+    debug("get factory settings");
     {
         std::vector<uint8_t> data(12);
         if (!m_dev.request_get(DeviceCommand::GET_FACTORY_SETTINGS, data))

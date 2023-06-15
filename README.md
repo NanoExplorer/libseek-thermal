@@ -74,27 +74,24 @@ Consider setting the `CMAKE_INSTALL_PREFIX` to a location in your build director
 
 Before this library or example programs will work, you will need to set the driver for the USB device. The simplest way to do this is to use [Zadig](https://zadig.akeo.ie/). Run Zadig, then select `iAP Interface`, select `libusb-win32`, then click `Install Driver`.
 
-## Getting USB access
+## Configuring USB access
 
-You need to add a udev rule to be able to run the program as non root user:
 
-Udev rule:
+You need to add a udev rule to be able to run the program as non root user, and another rule to prevent the kernel from putting the device to sleep. (If the camera is put to sleep, running any utility will fail with `Error: control transfer failed: LIBUSB_ERROR_PIPE` and you will be forced to unplug the camera and plug it back in again.)
 
-```
-SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="XXXX", MODE="0666", GROUP="users"
-```
-
-Replace 'XXXX' with:
-* 0010: Seek Thermal Compact/CompactXR
-* 0011: Seek Thermal CompactPRO
-
-or manually chmod the device file after plugging the usb cable:
+Udev rules:
 
 ```
-sudo chmod 666 /dev/bus/usb/00x/00x
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0010", MODE="0666", GROUP="users"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0010", TEST=="power/control", ATTR{power/control}:="on"
+
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0011", MODE="0666", GROUP="users"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0011", TEST=="power/control", ATTR{power/control}:="on"
 ```
 
-with '00x' the usb bus found with the lsusb command
+Put the above in `/etc/udev/rules.d/90-seekcam.rules`.
+
+The lines with `MODE=` set the device to be readable and writable by everyone, and the lines with `power/control` prevent sleep. `idProduct==0011` corresponds to the Seek Pro and `idProduct==0010` applies to the Seek Compact and Seek Compact XR.
 
 ## Running example binaries
 
@@ -172,3 +169,13 @@ seek_viewer -t seek -F flat_field.png
 seek_test_pro flat_field.png
 seek_viewer -t seekpro -F flat_field.png
 ```
+## Framebuffer Implementation
+In order to run this program from a raspberry pi zero connected to a small 2.2" 320x240 screen, I have implemented a framebuffer
+output for the program. Instead of OpenCV opening a window under X, the image will be sent to the /dev/fb0 device, which draws
+on the screen directly. This will not work if you're running X. I have also implemented functions for the buttons on gpio pins
+17, 22, 23, and 27 - 17 starts a flat field, 22 switches to a variable colorbar scale, 23 sets a fixed colorbar scale based on
+whatever you're currently looking at, and 27 takes a still image (if you hold down 27 it shuts down the system).
+
+This implementation is based around the Adafruit 2.2" TFT display (https://www.adafruit.com/product/2315) set in raw text-only 
+mode based on their setup script. I have used a raspberry pi zero so that you can directly plug the SEEK thermal camera into the
+pi without adapters. Because of this, I had to solder the screen to the back of the pi instead of the front, which made for much more complicated wiring. 

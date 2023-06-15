@@ -6,8 +6,11 @@
 #include "SeekDevice.h"
 #include "SeekLogging.h"
 #include <libusb.h>
-#include <endian.h>
-#include <stdio.h>
+#ifdef __APPLE__
+  #include "macendian.h"
+#else
+  #include <endian.h>
+#endif
 
 using namespace LibSeek;
 
@@ -78,6 +81,7 @@ bool SeekDevice::open()
 
 void SeekDevice::close()
 {
+
     if (m_handle != NULL) {
         libusb_release_interface(m_handle, 0);  /* release claim */
         libusb_close(m_handle);                 /* revert open */
@@ -86,7 +90,7 @@ void SeekDevice::close()
 
     if (m_ctx != NULL) {
         libusb_exit(m_ctx);                     /* revert exit */
-        m_ctx = NULL;
+                m_ctx = NULL;
     }
 
     m_is_opened = false;
@@ -116,6 +120,7 @@ bool SeekDevice::fetch_frame(uint16_t* buffer, std::size_t size, std::size_t req
     int done = 0;
 
     while (todo != 0) {
+
         debug("Asking for %d B of data at %d\n", request_size, done);
         res = libusb_bulk_transfer(m_handle, 0x81, &buf[done], request_size, &actual_length, m_timeout);
         if (res == LIBUSB_ERROR_TIMEOUT)
@@ -125,6 +130,8 @@ bool SeekDevice::fetch_frame(uint16_t* buffer, std::size_t size, std::size_t req
             error("Error: bulk transfer failed: %s\n", libusb_error_name(res));
             return false;
         }
+
+        
         debug("Actual length %d\n", actual_length);
         todo -= actual_length;
         done += actual_length;

@@ -34,45 +34,62 @@ void handle_sig(int sig) {
     (void)sig;
     sigflag = 1;
 }
+// cv::Mat openFile(std::string fname, cv::Mat &m_raw_frame)
+// {
+//     cv::Mat m_additional_ffc;
+//     if (fname != std::string()) {
+//         m_additional_ffc = cv::imread(fname, -1);
+//         if (m_additional_ffc.type() != m_raw_frame.type()) {
+//             std::cerr<<"Error: "<<fname.c_str()<<"not found or it has the wrong type: "<<m_additional_ffc.type()<<std::endl;
+//             return cv::Mat::zeros(0,0,1);
+//         }
 
+//         if (m_additional_ffc.size() != m_raw_frame.size()) {
+//             std::cerr<<"Error: expected "<<fname.c_str()<<" to have size ["<<m_raw_frame.cols<<","<<m_raw_frame.rows<<"], got ["<<m_additional_ffc.cols<<","<<m_additional_ffc.rows<<"]"<<std::endl;
+//             return cv::Mat::zeros(0,0,1);
+//         }
+//     }
 
-// Normalize the image so that it uses the full color space available for display. 
-void normalize(Mat &inframe) {
-    static double min =-1, max = -1;
-    static float multiplier = -1;
-
-    if (auto_exposure_lock) {
-        if (min == -1) {
-            cv::minMaxLoc(inframe, &min, &max);
-            multiplier = 65535 / (max - min);
-        }
-        for (int y = 0; y < inframe.rows; y++) {
-            for (int x = 0; x < inframe.cols; x++) {
-                uint16_t val = inframe.at<uint16_t>(y, x);
-                if (val > max) {
-                    val = 65535;
-                } else if (val < min) {
-                    val = 0;
-                } else {
-                    val = (val - min) * multiplier;
-                }
-                inframe.at<uint16_t>(y, x) = val;
-            }
-        }
-    } else {
-        normalize(inframe, inframe, 0, 65535, NORM_MINMAX);
-        min = -1;
-    }
-}
-
+//     return m_additional_ffc;
+// }
 // Function to process a raw (corrected) seek frame
-void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int rotate) {
-    Mat frame_g8; // Transient Mat containers for processing
+void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int rotate, int last[], int staticMin, int staticMax) {
+    
+    Mat frame_g8, frame_g16,temp,tempmask; // Transient Mat containers for processing
+    int cols=inframe.cols,rows=inframe.rows;
 
-    normalize(inframe);
+    ushort min,max,low,high;
+    cv::Scalar imMean,imStd;
+    cv::meanStdDev(inframe,imMean,imStd);
+    frame_g16=cv::Mat::zeros(cols,rows,CV_16UC1);
 
+    double raw_maxvalue;
+    cv::minMaxIdx(inframe,0,&raw_maxvalue);
+    std::cout << raw_maxvalue << std::endl;
+
+    low=imMean[0]-2*imStd[0];
+    high=imMean[0]+4*imStd[0];
+
+    //slower min/max handling. In the old code, bad pixels would cause the colorbar scale
+    //to jump all over the place. The averaging I do here slows that down so that colorbar scale varys slower.
+    last[0]=(2*last[0]+low)/3;
+    last[1]=(2*last[1]+high)/3;
+
+    if (staticMin > -1)
+        min=staticMin;
+    else
+        min=last[0];
+    
+    if (staticMax > -1)
+        max=staticMax;
+    else
+        max=last[1];
+    
+    frame_g16=(inframe-min)*(65535.0/(max-min));
+    //normalize(inframe, frame_g16, 0, 65535, NORM_MINMAX,-1,mask);
     // Convert seek CV_16UC1 to CV_8UC1
-    inframe.convertTo(frame_g8, CV_8UC1, 1.0/256.0 );
+
+    frame_g16.convertTo(frame_g8, CV_8UC1, 1.0/256.0 );
 
     // Rotate image
     if (rotate == 90) {
@@ -177,6 +194,7 @@ void v4l2_out(int v4l2, Mat& outframe) {}
 
 int main(int argc, char** argv) {
     // Setup arguments for parser
+
     args::ArgumentParser parser("Seek Thermal Viewer");
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
     args::ValueFlag<std::string> _mode(parser, "mode", "The mode to use - v4l2, window, file", {'m', "mode"});
@@ -187,7 +205,9 @@ int main(int argc, char** argv) {
     args::ValueFlag<int> _colormap(parser, "colormap", "Color Map - number between 0 and 21 (see: cv::ColormapTypes for maps available in your version of OpenCV)", { 'c', "colormap" });
     args::ValueFlag<int> _rotate(parser, "rotate", "Rotation - 0, 90, 180 or 270 (default) degrees", {'r', "rotate"});
     args::ValueFlag<std::string> _camtype(parser, "camtype", "Seek Thermal Camera Model - seek or seekpro", {'t', "camtype"});
-
+    args::ValueFlag<int> _scalemin(parser, "scalemin", "Minimum value of color scale", {'m', "scalemin"});
+    args::ValueFlag<int> _scalemax(parser, "scalemax", "Maximum value of color scale", {'M', "scalemax"});
+    args::Flag _doLogScale(parser, "logscale", "Whether to use a log scale", {'l',"logscale"});
     // Parse arguments
     try {
         parser.ParseCLI(argc, argv);
@@ -208,6 +228,9 @@ int main(int argc, char** argv) {
     }
     
     float scale = 1.0;
+    int staticMin = -1;
+    int staticMax = -1;
+
     if (_scale)
         scale = args::get(_scale);
 
@@ -248,6 +271,15 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
+    if (_scalemin)
+        staticMin = args::get(_scalemin);
+
+    if (_scalemax)
+        staticMax = args::get(_scalemax);
+    bool logScale=false;
+    if (_doLogScale)
+        logScale = args::get(_doLogScale);
+
 
     // Register signals
     signal(SIGINT, handle_sig);
@@ -277,8 +309,10 @@ int main(int argc, char** argv) {
         std::cout << "Failed to read initial frame from camera, exiting" << std::endl;
         return 1;
     }
-
-    process_frame(seekframe, outframe, scale, colormap, rotate);
+    int last [2];
+    last[0]=0;
+    last[1]=65535;
+    process_frame(seekframe, outframe, scale, colormap, rotate,last,staticMin,staticMax);
 
     // Setup video for linux if that output is chosen
     int v4l2 = -1;
@@ -294,6 +328,7 @@ int main(int argc, char** argv) {
 #else  
         writer.open(output, CV_FOURCC('F', 'M', 'P', '4'), fps, Size(outframe.cols, outframe.rows));
 #endif
+
         if (!writer.isOpened()) {
             std::cerr << "Error can't create video writer" << std::endl;
             return 1;
@@ -317,9 +352,16 @@ int main(int argc, char** argv) {
         }
 
         // Retrieve frame from seek and process
-        process_frame(seekframe, outframe, scale, colormap, rotate);
 
-        if (mode == "v4l2") {
+        if(logScale){ 
+            seekframe.convertTo(seekframe,CV_64F);
+            cv::log(seekframe,seekframe);
+        }
+        process_frame(seekframe, outframe, scale, colormap, rotate,last,staticMin,staticMax);
+        //std::cout << outframe.type() <<std::endl;
+        if (output == "window") {
+            imshow("SeekThermal", outframe);
+        } else if (mode == "v4l2") {
             v4l2_out(v4l2, outframe);
         } else if (mode == "window") {
             imshow(WINDOW_NAME, outframe);
@@ -333,10 +375,18 @@ int main(int argc, char** argv) {
             }
         } else {
             writer << outframe;
+            imshow("SeekThermal", outframe);
+            char c = waitKey(10);
+            if (c == 's') {
+                waitKey(0);
+            }
         }
 
     }
-
+    //cv::Mat outfile;
+    //outframe.convertTo(outfile, CV_16UC3);
+    cv::imwrite("lastimg_raw.png", seekframe);
+    std::cout<< outframe.depth()<<outframe.channels();
     std::cout << "Break signal detected, exiting" << std::endl;
     return 0;
 }

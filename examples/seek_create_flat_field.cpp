@@ -22,6 +22,7 @@ int main(int argc, char** argv)
     args::ValueFlag<std::string> _camtype(parser, "camtype", "Seek Thermal Camera Model - seek or seekpro", { 't', "camtype" });
     args::ValueFlag<int> _warmup(parser, "warmup", "Warmup, number of frames to discard before sampling - default 10", { 'w', "warmup" });
 
+
     // Parse arguments
     try {
         parser.ParseCLI(argc, argv);
@@ -54,12 +55,12 @@ int main(int argc, char** argv)
     if (_output)
         outfile = args::get(_output);
 
-    std::string camtype = "seek";
+    std::string camtype = "seekpro";
     if (_camtype)
         camtype = args::get(_camtype);
 
-    // Init correct cam type
-    if (camtype == "seekpro") {
+    if (camtype == "seekpro"){
+
         cam = &seekpro;
     }
     else {

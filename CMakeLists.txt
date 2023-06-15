@@ -36,6 +36,7 @@ if (MSVC)
 	include_directories (${PROJECT_SOURCE_DIR}/win)
 endif ()
 
+
 add_subdirectory (src)
 add_subdirectory (examples)
 
