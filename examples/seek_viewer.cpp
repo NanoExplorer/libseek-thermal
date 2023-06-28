@@ -65,26 +65,29 @@ void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int r
 
     double raw_maxvalue;
     cv::minMaxIdx(inframe,0,&raw_maxvalue);
-    std::cout << raw_maxvalue << std::endl;
+    //std::cout << raw_maxvalue << std::endl;
 
     low=imMean[0]-2*imStd[0];
     high=imMean[0]+4*imStd[0];
 
     //slower min/max handling. In the old code, bad pixels would cause the colorbar scale
     //to jump all over the place. The averaging I do here slows that down so that colorbar scale varys slower.
-    last[0]=(2*last[0]+low)/3;
-    last[1]=(2*last[1]+high)/3;
 
-    if (staticMin > -1)
+
+
+    if (staticMin > -1) {
         min=staticMin;
-    else
+    } else {
+        last[0]=(2*last[0]+low)/3;
         min=last[0];
-    
-    if (staticMax > -1)
+    } 
+
+    if (staticMax > -1) {
         max=staticMax;
-    else
+    } else {
+        last[1]=(2*last[1]+high)/3;
         max=last[1];
-    
+    }
     frame_g16=(inframe-min)*(65535.0/(max-min));
     //normalize(inframe, frame_g16, 0, 65535, NORM_MINMAX,-1,mask);
     // Convert seek CV_16UC1 to CV_8UC1
@@ -312,6 +315,7 @@ int main(int argc, char** argv) {
     int last [2];
     last[0]=0;
     last[1]=65535;
+
     process_frame(seekframe, outframe, scale, colormap, rotate,last,staticMin,staticMax);
 
     // Setup video for linux if that output is chosen
@@ -357,7 +361,11 @@ int main(int argc, char** argv) {
             seekframe.convertTo(seekframe,CV_64F);
             cv::log(seekframe,seekframe);
         }
-        process_frame(seekframe, outframe, scale, colormap, rotate,last,staticMin,staticMax);
+        if (auto_exposure_lock) {
+            process_frame(seekframe, outframe, scale, colormap, rotate,last,last[0],last[1]);
+        } else {
+            process_frame(seekframe, outframe, scale, colormap, rotate,last,staticMin,staticMax);
+        }   
         //std::cout << outframe.type() <<std::endl;
         if (output == "window") {
             imshow("SeekThermal", outframe);
