@@ -90,6 +90,7 @@ protected:
     size_t m_request_size;
     cv::Mat m_raw_frame;
     //cv::Mat m_initial_frame;
+    cv::Mat m_full_raw_frame;
     cv::Mat m_flat_field_calibration_frame;
     cv::Mat m_additional_ffc;
     cv::Mat m_dead_pixel_mask;

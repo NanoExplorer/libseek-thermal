@@ -14,6 +14,8 @@ Done:
 #include "SeekCam.h"
 #include "SeekLogging.h"
 #include <iomanip>
+#include <iostream>
+#include <sstream>
 
 using namespace LibSeek;
 
@@ -30,6 +32,12 @@ SeekCam::SeekCam(int vendor_id, int product_id, uint16_t* buffer, size_t raw_hei
                 CV_16UC1,
                 buffer,
                 cv::Mat::AUTO_STEP),
+    m_full_raw_frame(raw_height,
+                     raw_width,
+                     CV_16UC1,
+                     buffer,
+                     cv::Mat::AUTO_STEP),
+
     m_flat_field_calibration_frame(),
     m_additional_ffc(),
     m_dead_pixel_mask()
@@ -123,6 +131,7 @@ bool SeekCam::grab()
             m_raw_frame.copyTo(m_flat_field_calibration_frame);
             //cv::imwrite("lastdark_raw.png", m_raw_frame);
         }
+
     }
 
     return false;
@@ -252,6 +261,12 @@ bool SeekCam::get_frame()
     /* store frame data */
     if (!m_dev.fetch_frame(m_raw_data, m_raw_data_size, m_request_size))
         return false;
+
+    // std::ostringstream filename;
+    // filename << "frame_" << frame_counter() << ".png";
+    // cv::imwrite(filename.str(), m_full_raw_frame);
+
+    // std::cout << m_raw_data[5] << std::endl;
 
     return true;
 }
