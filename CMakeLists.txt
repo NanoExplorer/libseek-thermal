@@ -1,5 +1,5 @@
 project(libseek-thermal)
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.5)
 
 # Request C++11 standard, using new CMake variables.
 set (CMAKE_CXX_STANDARD 11)

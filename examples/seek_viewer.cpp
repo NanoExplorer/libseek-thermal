@@ -340,6 +340,7 @@ int main(int argc, char** argv) {
 
         std::cout << "Video stream created, dimension: " << outframe.cols << "x" << outframe.rows << ", fps:" << fps << std::endl;
     } else if (mode == "window") {
+        startWindowThread();
         namedWindow(WINDOW_NAME, cv::WINDOW_NORMAL);
         setWindowProperty(WINDOW_NAME, WindowPropertyFlags::WND_PROP_ASPECT_RATIO, cv::WINDOW_KEEPRATIO);
         resizeWindow(WINDOW_NAME, outframe.cols, outframe.rows);
@@ -347,14 +348,22 @@ int main(int argc, char** argv) {
 
 
     // Main loop to retrieve frames from camera and write them out
+    if (!seek->read2_starter()) {
+        std::cout << "Failed to request frame from camera, exiting" << std::endl;
+        return 1;
+    }
     while (!sigflag) {
 
         // If signal for interrupt/termination was received, break out of main loop and exit
-        if (!seek->read(seekframe)) {
+        if (!seek->read2(seekframe)) {
             std::cout << "Failed to read frame from camera, exiting" << std::endl;
             return 1;
         }
-
+        if (!seek->read2_starter()) {
+            std::cout << "Failed to request frame from camera, exiting" << std::endl;
+            return 1;
+        }
+        std::cout << seek->frame_counter() << std::endl;
         // Retrieve frame from seek and process
 
         if(logScale){ 

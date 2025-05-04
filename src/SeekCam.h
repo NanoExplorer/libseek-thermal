@@ -35,6 +35,7 @@ public:
      *  Returns true on success
      */
     bool grab();
+    bool grab2();
 
     /*
      *  Retrieve the last grabbed 14-bit frame
@@ -55,6 +56,15 @@ public:
      */
     bool read(cv::Mat& dst);
 
+    /*
+     *  Read grabs and retrieves a frame
+     *  Returns true on success
+     *  designed for use in for loop. Does not request a new frame 
+     *  beforehand. Use read2_starter beforehand to request the frame.
+     */
+    bool read2(cv::Mat& dst);
+    bool read2_starter();
+
     void add_dead_pixel(std::vector<cv::Point> new_dead_pixels);
     bool set_additional_ffc(cv::Mat& newframe);
     /*
@@ -71,6 +81,8 @@ protected:
     virtual int frame_id() = 0;
     bool open_cam();
     bool get_frame();
+    bool request_frame();
+    bool cam_fetch_frame();
     void print_usb_data(std::vector<uint8_t>& data);
     void create_dead_pixel_list(cv::Mat frame, cv::Mat& dead_pixel_mask,
                                             std::vector<cv::Point>& dead_pixel_list);

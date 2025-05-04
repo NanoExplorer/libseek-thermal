@@ -132,10 +132,36 @@ bool SeekCam::grab()
             //cv::imwrite("lastdark_raw.png", m_raw_frame);
         }
 
-    }
 
+    }
     return false;
 }
+
+bool SeekCam::grab2()
+{
+    int i;
+
+    for (i=0; i<40; i++) {
+        if(!cam_fetch_frame()) {
+            error("Error: frame acquisition failed\n");
+            return false;
+        }
+
+        if (frame_id() == 3) {
+            return true;
+
+        } else if (frame_id() == 1) {
+            //std::cout<<"Got ffc"<<std::endl;
+            m_raw_frame.copyTo(m_flat_field_calibration_frame);
+            //cv::imwrite("lastdark_raw.png", m_raw_frame);
+        }
+        if (!request_frame())
+            return false;
+
+    }
+    return false;
+}
+
 
 void SeekCam::retrieve(cv::Mat& dst)
 {
@@ -170,6 +196,22 @@ bool SeekCam::read(cv::Mat& dst)
 
     return true;
 }
+
+bool SeekCam::read2(cv::Mat& dst)
+{
+    if (!grab2())
+        return false;
+
+    retrieve(dst);
+
+    return true;
+}
+
+bool SeekCam::read2_starter()
+{
+    return request_frame();
+}
+
 
 void SeekCam::convertToGreyScale(cv::Mat& src, cv::Mat& dst)
 {
@@ -249,7 +291,7 @@ bool SeekCam::open_cam()
     return false;
 }
 
-bool SeekCam::get_frame()
+bool SeekCam::request_frame()
 {
     /* request new frame */
     uint8_t* s = reinterpret_cast<uint8_t*>(&m_raw_data_size);
@@ -257,10 +299,24 @@ bool SeekCam::get_frame()
     std::vector<uint8_t> data = { s[0], s[1], s[2], s[3] };
     if (!m_dev.request_set(DeviceCommand::START_GET_IMAGE_TRANSFER, data))
         return false;
+    return true;
+}
 
-    /* store frame data */
+bool SeekCam::cam_fetch_frame()
+{
     if (!m_dev.fetch_frame(m_raw_data, m_raw_data_size, m_request_size))
         return false;
+    return true;
+}
+
+bool SeekCam::get_frame()
+{
+    if (!request_frame())
+        return false;
+    /* store frame data */
+
+    return cam_fetch_frame();
+
 
     // std::ostringstream filename;
     // filename << "frame_" << frame_counter() << ".png";
@@ -268,7 +324,7 @@ bool SeekCam::get_frame()
 
     // std::cout << m_raw_data[5] << std::endl;
 
-    return true;
+
 }
 
 void SeekCam::print_usb_data(std::vector<uint8_t>& data)
