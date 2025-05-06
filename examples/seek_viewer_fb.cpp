@@ -1,7 +1,7 @@
 // Seek Thermal Viewer/Streamer
 // http://github.com/fnoop/maverick
 
-#include <opencv2/highgui/highgui.hpp>
+//#include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include "seek.h"
 #include "SeekCam.h"
