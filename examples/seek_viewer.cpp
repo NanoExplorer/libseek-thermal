@@ -363,7 +363,7 @@ int main(int argc, char** argv) {
             std::cout << "Failed to request frame from camera, exiting" << std::endl;
             return 1;
         }
-        std::cout << seek->frame_counter() << std::endl;
+        // std::cout << seek->frame_counter() << std::endl;
         // Retrieve frame from seek and process
 
         if(logScale){ 

@@ -8,7 +8,7 @@
 
 #include <stdio.h>
 
-
+#define SEEK_DEBUG
 #ifdef SEEK_DEBUG
 #define debug(fmt, ...)     printf("%s:%d:%s(): " fmt, __FILE__, __LINE__, __func__, ## __VA_ARGS__);
 #define error(fmt, ...)     fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, __LINE__, __func__, ## __VA_ARGS__);
