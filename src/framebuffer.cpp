@@ -14,6 +14,7 @@ Framebuffer::Framebuffer(const char* filename):
     m_finfo(),
     m_screensize(0),
     m_fbp(),
+    m_imagedata(),
     m_uncopiedrows(0)
 
 {
@@ -43,6 +44,7 @@ Framebuffer::Framebuffer(const char* filename):
                     //    (m_vinfo.yres+m_vinfo.yoffset) * m_finfo.line_length;
     m_fbp = (char *)mmap(0, m_screensize, PROT_READ | PROT_WRITE, MAP_SHARED,
                        m_fbfd, 0);
+    m_imagedata = (char *)malloc(m_screensize);
     if ((int64_t)m_fbp == -1) {
         perror("Error: failed to map framebuffer device to memory");
         exit(4);
@@ -59,6 +61,7 @@ Framebuffer::~Framebuffer()
 }
 void Framebuffer::closefb(){
     munmap(m_fbp,m_screensize);
+    free(m_imagedata);
     close(m_fbfd);
 }
 void Framebuffer::setUncopiedRows(uint numrows){
@@ -83,15 +86,20 @@ void Framebuffer::writeFrame(cv::Mat& frame){
     for (uint row = 0; row < m_vinfo.yres-m_uncopiedrows; row++) {
         uint8_t* rowptr = frame.ptr(row);
         //flag = true;
+        // apparently I fell for one of the classic blunders. 
+        // The first is to never get involved in a land war in Asia,
+        // but the second, only slightly less well-known, is 
+        // never to write directly to an mmaped framebuffer pixel by pixel.
+        // https://stackoverflow.com/questions/64789056/writing-into-framebuffer-with-a-c-program-is-very-slow-raspberry-pi
         for (uint col=0; col<m_vinfo.xres; col++) {
             uint location = (col+m_vinfo.xoffset) * (m_vinfo.bits_per_pixel/8) +
                    (row+m_vinfo.yoffset) * m_finfo.line_length;
             if(m_vinfo.bits_per_pixel==32){
-                *(m_fbp + location) = rowptr[3*col];
-                *(m_fbp + location+1) = rowptr[3*col+1];
-                *(m_fbp + location+2) = rowptr[3*col+2];
+                *(m_imagedata + location) = rowptr[3*col];
+                *(m_imagedata + location+1) = rowptr[3*col+1];
+                *(m_imagedata + location+2) = rowptr[3*col+2];
                 //note both fbp and rowptr have BGR color order
-                *(m_fbp + location+3) = 0;
+                *(m_imagedata + location+3) = 0;
             }else if(m_vinfo.bits_per_pixel==16){
                 //red 5bit, green 6bit, blue 5bit
                 //Green 6 bits are split over the two bytes
@@ -110,11 +118,12 @@ void Framebuffer::writeFrame(cv::Mat& frame){
                 //uint8_t byte2=(red<<3)+(green>>3);
                 //*(fbp+location)=byte1;
                 //*(fbp+location+1)=byte2;
-                *((unsigned short int*)(m_fbp+location))=px;
+                *((unsigned short int*)(m_imagedata+location))=px;
 
             }else{
                 printf("bits per pixel == %d NYI",m_vinfo.bits_per_pixel);
             }
         }
+        memcpy(m_fbp, m_imagedata, m_screensize);
     }
 }
