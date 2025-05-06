@@ -124,6 +124,6 @@ void Framebuffer::writeFrame(cv::Mat& frame){
                 printf("bits per pixel == %d NYI",m_vinfo.bits_per_pixel);
             }
         }
-        memcpy(m_fbp, m_imagedata, m_screensize);
     }
+    memcpy(m_fbp, m_imagedata, m_screensize);
 }

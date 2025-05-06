@@ -380,9 +380,9 @@ int main(int argc, char** argv)
         if (bs.battery%20==1){
             std::cout<<std::endl<<"LOW BATTERY"<<std::flush;
             textcounter=20;
-        } else if(bs.battery > 500){
-            system("sudo shutdown now");
-        }
+        } //else if(bs.battery > 500){
+        //     system("sudo shutdown now");
+        // }
         if (textcounter>0) {
             textcounter --;
             fbwriter.setUncopiedRows(12);
