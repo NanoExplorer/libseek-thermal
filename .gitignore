@@ -3,3 +3,10 @@ tags
 *.o
 *.a
 *.so
+.vs/
+out/**
+CMakeSettings.json
+macbuild
+pixelmathA.c
+seek.py
+test_frames

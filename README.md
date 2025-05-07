@@ -1,8 +1,6 @@
 # libseek-thermal
 
-[![Build Status](https://travis-ci.org/maartenvds/libseek-thermal.svg?branch=master)](https://travis-ci.org/maartenvds/libseek-thermal) master
-
-[![Build Status](https://travis-ci.org/maartenvds/libseek-thermal.svg?branch=development)](https://travis-ci.org/maartenvds/libseek-thermal) development
+![CMake](https://github.com/OpenThermal/libseek-thermal/workflows/CMake/badge.svg?branch=master)
 
 ## Description
 
@@ -33,7 +31,6 @@ Dependencies:
 * cmake
 * libopencv-dev (>= 2.4)
 * libusb-1.0-0-dev
-* libboost-program-options-dev
 
 NOTE: you can just 'apt-get install' all libs above
 
@@ -41,7 +38,7 @@ NOTE: you can just 'apt-get install' all libs above
 cd libseek-thermal
 mkdir build
 cd build
-cmake ../
+cmake ..
 make
 ```
 
@@ -58,27 +55,43 @@ For more build options (debug/release, install prefix, opencv install dir, addre
 cmake-gui ../
 ```
 
-## Getting USB access
+### Windows
 
-You need to add a udev rule to be able to run the program as non root user:
+This library and example programs can be built on Windows with multiple versions of Microsoft Visual Studio. This is most readily done with Visual Studio 2015 or newer, as dependancy binaries for Windows are available from the official projects, as described below.
 
-Udev rule:
+libusb is required, and Windows binaries are available from the [offical libusb project](https://libusb.info/).
+* Download the latest binary release (files ending in `.7z`) from [libusb GitHub Releases](https://github.com/libusb/libusb/releases)
+* Extract the archive
+* If using libusb-1.0.24 or greater you will need to copy the contents (`MS64` & `MS32`) of the `VS201X` directory approriate for your version of visual studio up into the root `libusb-1.0.X` directory.
+* Set `LIBUSB_DIR` to the extracted directory (e.g., `C:\local\libusb-1.0.23`)
+
+OpenCV is required, and Windows binaries are available from the [official OpenCV project](https://opencv.org/).
+* Download one of the Windows releases from the [OpenCV releases page](https://opencv.org/releases/) (3.x and 4.x work)
+* Run the self-extracting archive
+* Set `OpenCV_DIR` to the build directory containing `OpenCVConfig.cmake` (e.g., `C:\local\opencv-3.4.10\build`)
+
+Consider setting the `CMAKE_INSTALL_PREFIX` to a location in your build directory. Then after running the INSTALL target, copy the libusb and OpenCV libraries (e.g., `libusb-1.0.dll` and `opencv_world430.dll`) to the `bin\` directory containing `seek_test.exe`.
+
+Before this library or example programs will work, you will need to set the driver for the USB device. The simplest way to do this is to use [Zadig](https://zadig.akeo.ie/). Run Zadig, then select `iAP Interface`, select `libusb-win32`, then click `Install Driver`.
+
+## Configuring USB access
+
+
+You need to add a udev rule to be able to run the program as non root user, and another rule to prevent the kernel from putting the device to sleep. (If the camera is put to sleep, running any utility will fail with `Error: control transfer failed: LIBUSB_ERROR_PIPE` and you will be forced to unplug the camera and plug it back in again.)
+
+Udev rules:
 
 ```
-SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="XXXX", MODE="0666", GROUP="users"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0010", MODE="0666", GROUP="users"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0010", TEST=="power/control", ATTR{power/control}:="on"
+
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0011", MODE="0666", GROUP="users"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="289d", ATTRS{idProduct}=="0011", TEST=="power/control", ATTR{power/control}:="on"
 ```
 
-Replace 'XXXX' with:
-* 0010: Seek Thermal Compact/CompactXR
-* 0011: Seek Thermal CompactPRO
+Put the above in `/etc/udev/rules.d/90-seekcam.rules`.
 
-or manually chmod the device file after plugging the usb cable:
-
-```
-sudo chmod 666 /dev/bus/usb/00x/00x
-```
-
-with '00x' the usb bus found with the lsusb command
+The lines with `MODE=` set the device to be readable and writable by everyone, and the lines with `power/control` prevent sleep. `idProduct==0011` corresponds to the Seek Pro and `idProduct==0010` applies to the Seek Compact and Seek Compact XR.
 
 ## Running example binaries
 
@@ -86,6 +99,7 @@ with '00x' the usb bus found with the lsusb command
 ./examples/seek_test       # Minimal Thermal Compact/CompactXR example
 ./examples/seek_test_pro   # Minimal Thermal CompactPRO example
 ./examples/seek_viewer     # Example with more features supporting all cameras, run with --help for command line options
+./examples/seek_snapshot   # Takes still images, run with --help for command line options
 ```
 
 Or if you installed the library you can run from any location:
@@ -96,12 +110,18 @@ seek_test_pro
 seek_viewer
 ```
 
-Some example command lines:
+### seek_viewer
+seek_viewer is bare bones UI for the seek thermal devices. It can display video on screen, record it to a file, or stream it to a v4l2 loopback device for integration with image processing pipelines. It supports image rotation, scaling, and color mapping using any of the OpenCV color maps. While running `f` will set the display output full screen and `s` will freezeframe.
 
 ```
-seek_viewer --camtype=seekpro --colormap=11 --rotate=0                     # view color mapped thermal video
-seek_viewer --camtype=seekpro --colormap=11 --rotate=0 --output=seek.avi   # record color mapped thermal video
+seek_viewer --camtype=seekpro --colormap=11 --rotate=0                          # view color mapped thermal video
+seek_viewer --camtype=seekpro --colormap=11 --mode=file --output=seek.avi       # record color mapped thermal video
+seek_viewer --camtype=seekpro --colormap=11 --mode=v4l2 --output=/dev/video0    # stream the thermal video to v4l2 device
 ```
+
+### seek_snapshot
+seek_snapshot takes still images. This is useful for intergrating into shell scripts. It supports rotation and color mapping in the same manner as seek_viewer. Run with --help for all options.
+
 
 ## Linking the library to another program
 
@@ -131,23 +151,23 @@ Procedure:
 2) Run:
 ```
 # when using the Seek Thermal compact
-seek_create_flat_field -c seek seek_ffc.png
+seek_create_flat_field -tseek
 
 # When using the Seek Thermal compact pro
-seek_create_flat_field -c seekpro seekpro_ffc.png
+seek_create_flat_field -tseekpro
 ```
-The program will run for a few seconds and produces a .png file.
+The program will run for a few seconds and produces a flat_field.png file.
 
 3) Provide the produced .png file to one of the test programs:
 
 ```
 # when using the Seek Thermal compact
-seek_test seek_ffc.png
-seek_viewer -t seek -F seek_ffc.png
+seek_test flat_field.png
+seek_viewer -t seek -F flat_field.png
 
 # When using the Seek Thermal compact pro
-seek_test_pro seekpro_ffc.png
-seek_viewer -t seekpro -F seekpro_ffc.png
+seek_test_pro flat_field.png
+seek_viewer -t seekpro -F flat_field.png
 ```
 ## Framebuffer Implementation
 In order to run this program from a raspberry pi zero connected to a small 2.2" 320x240 screen, I have implemented a framebuffer

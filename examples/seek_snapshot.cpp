@@ -3,9 +3,13 @@
  *  Author: Maarten Vandersteegen
  */
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include "seek.h"
 #include <iostream>
 #include "args.h"
+using namespace cv;
+using namespace LibSeek;
+
 
 int main(int argc, char** argv)
 {
@@ -15,13 +19,14 @@ int main(int argc, char** argv)
     LibSeek::SeekThermal seek;
     LibSeek::SeekCam* cam;
 
-    args::ArgumentParser parser("Create Flat Frame");
+    args::ArgumentParser parser("Capture a single frame");
     args::HelpFlag help(parser, "help", "Display this help menu", { 'h', "help" });
-    args::ValueFlag<std::string> _output(parser, "outfile", "Name of the file to write to - default flat_field.png", { 'o', "outfile" });
-    args::ValueFlag<int> _smoothing(parser, "smoothing", "Smoothing factor, number of frames to collect and average - default 100", { 's', "smoothing" });
+    args::ValueFlag<std::string> _output(parser, "outfile", "Name of the file to write to - default output.png", { 'o', "outfile" });
+    args::ValueFlag<int> _smoothing(parser, "smoothing", "Smoothing factor, number of frames to collect and average - default 1", { 's', "smoothing" });
     args::ValueFlag<std::string> _camtype(parser, "camtype", "Seek Thermal Camera Model - seek or seekpro", { 't', "camtype" });
     args::ValueFlag<int> _warmup(parser, "warmup", "Warmup, number of frames to discard before sampling - default 10", { 'w', "warmup" });
-
+    args::ValueFlag<int> _colormap(parser, "colormap", "Color Map - number between 0 and 21 (see: cv::ColormapTypes for maps available in your version of OpenCV)", { 'c', "colormap" });
+    args::ValueFlag<int> _rotate(parser, "rotate", "Rotation - 0, 90, 180 or 270 (default) degrees", { 'r', "rotate" });
 
     // Parse arguments
     try {
@@ -43,7 +48,7 @@ int main(int argc, char** argv)
     }
 
     // Defaults 
-    int smoothing = 100;
+    int smoothing = 1;
     if (_smoothing)
         smoothing = args::get(_smoothing);
 
@@ -51,16 +56,26 @@ int main(int argc, char** argv)
     if (_warmup)
         warmup = args::get(_warmup);
 
-    std::string outfile = "flat_field.png";
+    std::string outfile = "output.png";
     if (_output)
         outfile = args::get(_output);
 
-    std::string camtype = "seekpro";
+    std::string camtype = "seek";
     if (_camtype)
         camtype = args::get(_camtype);
 
-    if (camtype == "seekpro"){
+    // Colormap int corresponding to enum: http://docs.opencv.org/3.2.0/d3/d50/group__imgproc__colormap.html
+    int colormap = -1;
+    if (_colormap)
+        colormap = args::get(_colormap);
 
+    // Rotate default is landscape view to match camera logo/markings
+    int rotate = 270;
+    if (_rotate)
+        rotate = args::get(_rotate);
+
+    // Init correct cam type
+    if (camtype == "seekpro") {
         cam = &seekpro;
     }
     else {
@@ -105,6 +120,34 @@ int main(int argc, char** argv)
     avg_frame /= smoothing;
     avg_frame.convertTo(frame_u16, CV_16UC1);
 
-    cv::imwrite(outfile, frame_u16);
+    Mat frame_g8, outframe; // Transient Mat containers for processing
+
+    normalize(frame_u16, frame_u16, 0, 65535, NORM_MINMAX);
+
+    // Convert seek CV_16UC1 to CV_8UC1
+    frame_u16.convertTo(frame_g8, CV_8UC1, 1.0 / 256.0);
+
+    // Apply colormap: https://docs.opencv.org/master/d3/d50/group__imgproc__colormap.html#ga9a805d8262bcbe273f16be9ea2055a65
+    if (colormap != -1) {
+        applyColorMap(frame_g8, outframe, colormap);
+    }
+    else {
+        cv::cvtColor(frame_g8, outframe, cv::COLOR_GRAY2BGR);
+    }
+
+    // Rotate image
+    if (rotate == 90) {
+        transpose(outframe, outframe);
+        flip(outframe, outframe, 1);
+    }
+    else if (rotate == 180) {
+        flip(outframe, outframe, -1);
+    }
+    else if (rotate == 270) {
+        transpose(outframe, outframe);
+        flip(outframe, outframe, 0);
+    }
+
+    cv::imwrite(outfile, outframe);
     return 0;
 }

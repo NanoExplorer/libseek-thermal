@@ -19,7 +19,7 @@ set (SOURCES
 set (SRC ${SOURCES} ${HEADERS})
 
 include_directories (
-    /usr/include/libusb-1.0
+    ${LIBUSB_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
 )
 
@@ -27,8 +27,8 @@ add_library (seek_static STATIC ${SRC})
 add_library (seek SHARED ${SRC})
 
 target_link_libraries (seek
+    ${LIBUSB_LIBRARIES}
     ${OpenCV_LIBS}
-    -lusb-1.0
 )
 
 # install library target and header files
