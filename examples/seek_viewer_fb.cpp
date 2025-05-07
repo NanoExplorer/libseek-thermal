@@ -338,8 +338,15 @@ int main(int argc, char** argv)
 
         //Check if user wants a flat frame
         if (bs.b27>20){
+            // grab queued image from camera
+            seek->read2(seekframe);
             //do flat field
             new_flat(seek);
+            //request another image
+            if (!seek->read2_starter()) {
+                std::cout << "Failed to request frame from camera, exiting" << std::endl;
+                return 1;
+            }
         }
 
         //Check if user wants to toggle colorbar mode
