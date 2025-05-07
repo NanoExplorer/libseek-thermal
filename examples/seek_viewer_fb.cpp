@@ -1,6 +1,10 @@
 // Seek Thermal Viewer/Streamer
 // http://github.com/fnoop/maverick
 
+#ifdef __APPLE__
+int main(int argc, char** argv) {}
+#else
+
 //#include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include "seek.h"
@@ -303,11 +307,19 @@ int main(int argc, char** argv)
     int textcounter;
     textcounter=0;
     // Main loop to retrieve frames from camera and output
+    if (!seek->read2_starter()) {
+        std::cout << "Failed to request frame from camera, exiting" << std::endl;
+        return 1;
+    }
     while (!sigflag) {
         // If signal for interrupt/termination was received, break out of main loop and exit
-        if (!seek->read(seekframe)) {
+        if (!seek->read2(seekframe)) {
             std::cout << "Failed to read frame from camera, exiting" << std::endl;
             return -1;
+        }
+        if (!seek->read2_starter()) {
+            std::cout << "Failed to request frame from camera, exiting" << std::endl;
+            return 1;
         }
         // Retrieve frame from seek and process
 
@@ -402,6 +414,8 @@ int main(int argc, char** argv)
     //outframe.convertTo(outfile, CV_16UC3);
     cv::imwrite("lastimg_raw.png", seekframe);
     std::cout<< outframe.depth()<<outframe.channels();
+    seek->read2(seekframe);
     std::cout << "Break signal detected, exiting" << std::endl;
     return 0;
 }
+#endif //APPLE

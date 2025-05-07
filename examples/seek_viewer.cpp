@@ -404,6 +404,7 @@ int main(int argc, char** argv) {
     //outframe.convertTo(outfile, CV_16UC3);
     cv::imwrite("lastimg_raw.png", seekframe);
     std::cout<< outframe.depth()<<outframe.channels();
+    seek->read2(seekframe);
     std::cout << "Break signal detected, exiting" << std::endl;
     return 0;
 }
