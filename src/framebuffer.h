@@ -35,7 +35,6 @@ protected:
 	struct fb_fix_screeninfo m_finfo;
 	long int m_screensize;
 	char* m_fbp;
-	char* m_imagedata;
 	uint m_uncopiedrows;
 };
 
