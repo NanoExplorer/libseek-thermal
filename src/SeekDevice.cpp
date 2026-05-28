@@ -6,8 +6,15 @@
 #include "SeekDevice.h"
 #include "SeekLogging.h"
 #include <libusb.h>
-#include <endian.h>
-#include <stdio.h>
+#ifdef __APPLE__
+  #include "macendian.h"
+#else
+  #include <endian.h>
+#endif
+#include <chrono>
+#include <ratio>
+
+#include <iostream>
 
 using namespace LibSeek;
 
@@ -78,6 +85,7 @@ bool SeekDevice::open()
 
 void SeekDevice::close()
 {
+
     if (m_handle != NULL) {
         libusb_release_interface(m_handle, 0);  /* release claim */
         libusb_close(m_handle);                 /* revert open */
@@ -86,7 +94,7 @@ void SeekDevice::close()
 
     if (m_ctx != NULL) {
         libusb_exit(m_ctx);                     /* revert exit */
-        m_ctx = NULL;
+                m_ctx = NULL;
     }
 
     m_is_opened = false;
@@ -107,26 +115,33 @@ bool SeekDevice::request_get(DeviceCommand::Enum command, std::vector<uint8_t>& 
     return control_transfer(1, static_cast<char>(command), 0, 0, data);
 }
 
-bool SeekDevice::fetch_frame(uint16_t* buffer, std::size_t size)
+bool SeekDevice::fetch_frame(uint16_t* buffer, std::size_t size, std::size_t request_size)
 {
+    auto t1 = std::chrono::high_resolution_clock::now();
+    auto t2 = std::chrono::high_resolution_clock::now();
     int res;
     int actual_length;
     int todo = size * sizeof(uint16_t);
     uint8_t* buf = reinterpret_cast<uint8_t*>(buffer);
     int done = 0;
-
+    debug("Starting new transfer!");
     while (todo != 0) {
-        debug("Asking for %d B of data at %d\n", todo, done);
-        res = libusb_bulk_transfer(m_handle, 0x81, &buf[done], todo, &actual_length, m_timeout);
-        if ((res != 0) && (res != LIBUSB_ERROR_TIMEOUT)) {
+
+        debug("Asking for %d B of data at %d\n", request_size, done);
+        res = libusb_bulk_transfer(m_handle, 0x81, &buf[done], request_size, &actual_length, m_timeout);
+        t2 = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> fp_ms = t2 - t1;
+        double test = static_cast<double>(fp_ms.count());
+        debug("took %f ms", test);
+        t1 = t2;
+        if (res == LIBUSB_ERROR_TIMEOUT)
+        {
+            error("Error: LIBUSB_ERROR_TIMEOUT\n");
+        } else if (res != 0) {
             error("Error: bulk transfer failed: %s\n", libusb_error_name(res));
             return false;
         }
-        // Sometimes we have less data transferred than expected - so just return this "broken" frame and keep going
-        if (res == LIBUSB_ERROR_TIMEOUT){
-            error("We have libusb timeout here: %s\n", libusb_error_name(res));
-            return true;
-        }
+
         
         debug("Actual length %d\n", actual_length);
         todo -= actual_length;

@@ -4,6 +4,8 @@
  *
  */
 
+#ifndef __APPLE__
+
 #ifndef FRAMEBUFFER_H
 #define FRAMEBUFFER_H
 
@@ -35,7 +37,6 @@ protected:
 	struct fb_fix_screeninfo m_finfo;
 	long int m_screensize;
 	char* m_fbp;
-	char* m_imagedata;
 	uint m_uncopiedrows;
 };
 
@@ -43,3 +44,4 @@ protected:
 
 
 #endif //FRAMEBUFFER_H
+#endif //APPLE
