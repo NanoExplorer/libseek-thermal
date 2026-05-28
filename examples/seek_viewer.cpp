@@ -55,17 +55,17 @@ void handle_sig(int sig) {
 // Function to process a raw (corrected) seek frame
 void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int rotate, int last[], int staticMin, int staticMax) {
     
-    Mat frame_g8, frame_g16,temp,tempmask; // Transient Mat containers for processing
-    int cols=inframe.cols,rows=inframe.rows;
+    Mat frame_g8, frame_g16;//temp,tempmask; // Transient Mat containers for processing
+    // int cols=inframe.cols,rows=inframe.rows;
 
     ushort min,max,low,high;
     cv::Scalar imMean,imStd;
     cv::meanStdDev(inframe,imMean,imStd);
-    frame_g16=cv::Mat::zeros(cols,rows,CV_16UC1);
+    // frame_g16=cv::Mat::zeros(cols,rows,CV_16UC1);
 
-    double raw_maxvalue;
-    cv::minMaxIdx(inframe,0,&raw_maxvalue);
-    //std::cout << raw_maxvalue << std::endl;
+    // double raw_maxvalue;
+    // cv::minMaxIdx(inframe,0,&raw_maxvalue);
+    // std::cout << imMean << " "<< imStd << std::endl;
 
     low=imMean[0]-2*imStd[0];
     high=imMean[0]+4*imStd[0];
@@ -88,11 +88,11 @@ void process_frame(Mat &inframe, Mat &outframe, float scale, int colormap, int r
         last[1]=(2*last[1]+high)/3;
         max=last[1];
     }
-    frame_g16=(inframe-min)*(65535.0/(max-min));
+    frame_g16=(inframe-min);
     //normalize(inframe, frame_g16, 0, 65535, NORM_MINMAX,-1,mask);
     // Convert seek CV_16UC1 to CV_8UC1
 
-    frame_g16.convertTo(frame_g8, CV_8UC1, 1.0/256.0 );
+    frame_g16.convertTo(frame_g8, CV_8UC1, (256.0/(max-min)));
 
     // Rotate image
     if (rotate == 90) {
@@ -363,7 +363,7 @@ int main(int argc, char** argv) {
             std::cout << "Failed to request frame from camera, exiting" << std::endl;
             return 1;
         }
-        // std::cout << seek->frame_counter() << std::endl;
+        //std::cout << seek->frame_counter() << std::endl;
         // Retrieve frame from seek and process
 
         if(logScale){ 
@@ -382,7 +382,13 @@ int main(int argc, char** argv) {
             v4l2_out(v4l2, outframe);
         } else if (mode == "window") {
             imshow(WINDOW_NAME, outframe);
-            char c = waitKey(10);
+            char c = waitKey(5); // the higher this number, the more likely you are
+            //to get half-corrupted frames. (corrupted is the wrong word though because
+            // they always look the same (with the top half being bright white and 
+            // some diagonal features.) This is in ms though, so you'd think that 10 would 
+            // be totally fine... 20 causes constant corruption. Also it's much, much worse
+            // if you move your mouse into frame??? and a sure way to trigger the weird frame
+            // is to press "s" which waits indefinitely
             key_handler(c);
 
             // If the window is closed by the user all window properties will return -1 and we should terminate
