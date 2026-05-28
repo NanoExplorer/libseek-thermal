@@ -146,9 +146,10 @@ bool SeekCam::grab2()
             error("Error: frame acquisition failed\n");
             return false;
         }
-
         if (frame_id() == 3) {
             return true;
+            //does not initiate another frame request, is that bad?
+            // no, we expect the caller to run read2_starter right after this (I guess)
 
         } else if (frame_id() == 1) {
             //std::cout<<"Got ffc"<<std::endl;
@@ -157,6 +158,7 @@ bool SeekCam::grab2()
         }
         if (!request_frame())
             return false;
+        // else continue looping
 
     }
     return false;
@@ -203,6 +205,17 @@ bool SeekCam::read2(cv::Mat& dst)
         return false;
 
     retrieve(dst);
+    
+    cv::Scalar imMean,imStd;
+    cv::meanStdDev(dst,imMean,imStd);
+
+    if (imStd[0]>12000){
+        std::cout << "tHrEw AwAy A fRaMe!" << std::endl;
+        read2_starter();
+        if (!grab2())
+            return false;
+        retrieve(dst);
+    }
 
     return true;
 }
